@@ -9,11 +9,6 @@ Minimal Python CLI to download the first _N_ images from a Pixabay search query 
    - environment variable: `PIXABAY_API_KEY`
    - or enter the key when prompted by the script
 
-## Why `pip install -r requirements.txt` can fail
-
-On newer Linux distributions, Python may be marked as an **externally managed environment** (PEP 668). In that case, installing packages globally with `pip` is blocked.
-
-Use a virtual environment instead.
 
 ## Setup (recommended)
 
