@@ -8,7 +8,6 @@ Minimal Python CLI to download the first _N_ images from a Pixabay search query 
 2. Use either:
    - environment variable: `PIXABAY_API_KEY`
    - or enter the key when prompted by the script
-Minimal Python CLI to download the first _N_ images from a Pixabay search query.
 
 ## Why `pip install -r requirements.txt` can fail
 
@@ -30,14 +29,38 @@ python -m pip install -r requirements.txt
 python pixabay_mass_downloader.py
 ```
 
-Prompts:
+## Prompt flow
+
+Basic prompts:
 1. Save location (press Enter to default to Desktop)
 2. New folder name
 3. Search query
 4. Number of images (1-100)
 5. Pixabay API key (only if `PIXABAY_API_KEY` is not already set)
 
-The script then downloads the first matching images into your selected folder.
+Advanced API prompts (matching Pixabay API options for image search):
+- `lang`
+- `image_type`
+- `orientation`
+- `category`
+- `min_width`
+- `min_height`
+- `colors`
+- `editors_choice`
+- `safesearch`
+- `order`
+- `page`
+- `per_page` (set automatically from your image count)
+- `id` (comma-separated image IDs)
+
+## Output files
+
+The script saves:
+- downloaded images (`image_001.jpg`, etc.)
+- `image_details.html` (readable details page)
+- `image_details.json` (raw details data)
+
+The details files include fields like image ID, size, tags, downloads, likes, comments, views, favorites, user, and Pixabay page URL.
 
 ## Example with environment variable
 
