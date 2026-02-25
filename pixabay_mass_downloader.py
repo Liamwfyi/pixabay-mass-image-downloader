@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
-"""Minimal Pixabay image mass downloader."""
+"""Minimal Pixabay image mass downloader (API-based)."""
 
 from __future__ import annotations
 
-import json
-import re
+import os
 from pathlib import Path
 from typing import List
-from urllib.parse import quote
 
-import cloudscraper
-from bs4 import BeautifulSoup
+import requests
 
 MAX_IMAGES = 100
+API_URL = "https://pixabay.com/api/"
 
 
 def prompt_parent_directory() -> Path:
@@ -51,57 +49,55 @@ def prompt_image_count() -> int:
         print(f"Please enter a value between 1 and {MAX_IMAGES}.")
 
 
-def build_search_url(query: str) -> str:
-    return f"https://pixabay.com/photos/search/{quote(query)}/?content_type=authentic"
+def prompt_api_key() -> str:
+    env_key = os.getenv("PIXABAY_API_KEY", "").strip()
+    if env_key:
+        return env_key
+
+    while True:
+        key = input("Pixabay API key (or set PIXABAY_API_KEY): ").strip()
+        if key:
+            return key
+        print("API key cannot be empty.")
 
 
-def fetch_image_urls(query: str, limit: int) -> List[str]:
-    search_url = build_search_url(query)
-    scraper = cloudscraper.create_scraper(browser="chrome")
-    response = scraper.get(search_url, timeout=30)
+def fetch_image_urls(api_key: str, query: str, limit: int) -> List[str]:
+    params = {
+        "key": api_key,
+        "q": query,
+        "image_type": "photo",
+        "safesearch": "true",
+        "per_page": str(limit),
+        "page": "1",
+    }
+
+    response = requests.get(API_URL, params=params, timeout=30)
     response.raise_for_status()
 
-    soup = BeautifulSoup(response.text, "html.parser")
+    payload = response.json()
+    hits = payload.get("hits", [])
+    if not isinstance(hits, list):
+        return []
+
     found: List[str] = []
-    seen = set()
-
-    for script in soup.find_all("script", type="application/ld+json"):
-        content = script.string or script.get_text()
-        if not content.strip():
-            continue
-        try:
-            data = json.loads(content)
-        except json.JSONDecodeError:
+    for hit in hits:
+        if not isinstance(hit, dict):
             continue
 
-        items = data if isinstance(data, list) else [data]
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            if item.get("@type") != "ImageObject":
-                continue
+        image_url = hit.get("largeImageURL") or hit.get("webformatURL")
+        if not isinstance(image_url, str) or not image_url:
+            continue
 
-            url = item.get("contentUrl")
-            if not isinstance(url, str):
-                continue
-            if not re.match(r"^https://cdn\.pixabay\.com/photo/.*\.(jpg|jpeg|png)$", url, re.IGNORECASE):
-                continue
-            if url in seen:
-                continue
-
-            seen.add(url)
-            found.append(url)
-            if len(found) >= limit:
-                return found
+        found.append(image_url)
+        if len(found) >= limit:
+            break
 
     return found
 
 
 def download_images(urls: List[str], destination: Path) -> None:
-    scraper = cloudscraper.create_scraper(browser="chrome")
-
     for idx, url in enumerate(urls, start=1):
-        response = scraper.get(url, timeout=60, stream=True)
+        response = requests.get(url, timeout=60, stream=True)
         response.raise_for_status()
 
         ext = Path(url.split("?")[0]).suffix or ".jpg"
@@ -121,12 +117,20 @@ def main() -> None:
     folder_name = prompt_folder_name()
     query = prompt_search_query()
     requested_count = prompt_image_count()
+    api_key = prompt_api_key()
 
     target_dir = parent_dir / folder_name
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    print("Searching Pixabay...")
-    image_urls = fetch_image_urls(query, requested_count)
+    print("Searching Pixabay via API...")
+
+    try:
+        image_urls = fetch_image_urls(api_key, query, requested_count)
+    except requests.HTTPError as exc:
+        print(f"Pixabay API request failed: {exc}")
+        print("Verify your API key and try again.")
+        return
+
     if not image_urls:
         print("No images found for that query.")
         return
