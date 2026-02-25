@@ -8,6 +8,7 @@ Minimal Python CLI to download the first _N_ images from a Pixabay search query 
 2. Use either:
    - environment variable: `PIXABAY_API_KEY`
    - or enter the key when prompted by the script
+Minimal Python CLI to download the first _N_ images from a Pixabay search query.
 
 ## Why `pip install -r requirements.txt` can fail
 
