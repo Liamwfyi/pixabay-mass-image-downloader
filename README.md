@@ -58,7 +58,7 @@ Debug mode behavior:
 - Prints current actions (request params, status codes, file writes, skips).
 - Prints sanitized API response payloads.
 - Redacts URL fields in debug output so image links are not printed.
-- If rate limit (`429`) is hit, prints a wait message (uses `Retry-After` header when present).
+- If rate limit (`429`) is hit, automatically retries with backoff + jitter and shows wait messaging.
 
 ## Troubleshooting
 
@@ -82,8 +82,9 @@ Debug mode behavior:
 1. Collects user inputs (and debug mode preference).
 2. Builds Pixabay API request parameters.
 3. Calls `https://pixabay.com/api/`.
-4. Downloads the first matching images into your target folder.
-5. Saves metadata files:
+4. Downloads matching images into your target folder with a small cooldown between files.
+5. Retries API/image requests when `429` is returned (uses `Retry-After` when available, otherwise exponential backoff + jitter).
+6. Saves metadata files:
    - `image_details.json`
    - `image_details.html`
 

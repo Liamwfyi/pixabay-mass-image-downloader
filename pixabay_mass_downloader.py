@@ -6,6 +6,8 @@ from __future__ import annotations
 import html
 import json
 import os
+import random
+import time
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -13,6 +15,9 @@ import requests
 
 MAX_IMAGES = 100
 API_URL = "https://pixabay.com/api/"
+DOWNLOAD_COOLDOWN_SECONDS = 0.35
+MAX_RETRIES = 5
+BACKOFF_BASE_SECONDS = 1.5
 VALID_IMAGE_TYPES = ("all", "photo", "illustration", "vector")
 VALID_ORIENTATIONS = ("all", "horizontal", "vertical")
 VALID_ORDERS = ("popular", "latest")
@@ -221,18 +226,62 @@ def prompt_advanced_options(requested_count: int) -> Dict[str, str]:
     return options
 
 
+def request_with_retry(
+    method: str,
+    url: str,
+    *,
+    debug: bool,
+    request_label: str,
+    redact_url_in_logs: bool,
+    **kwargs: Any,
+) -> requests.Response:
+    for attempt in range(1, MAX_RETRIES + 1):
+        debug_url = "<redacted>" if redact_url_in_logs else url
+        debug_log(debug, f"{request_label}: attempt {attempt}/{MAX_RETRIES} -> {method.upper()} {debug_url}")
+
+        response = requests.request(method, url, **kwargs)
+        debug_log(debug, f"{request_label}: status {response.status_code}")
+
+        if response.status_code != 429:
+            return response
+
+        retry_after_raw = response.headers.get("Retry-After", "")
+        try:
+            retry_after_seconds = max(1.0, float(retry_after_raw)) if retry_after_raw else 0.0
+        except ValueError:
+            retry_after_seconds = 0.0
+
+        exponential_backoff = BACKOFF_BASE_SECONDS * (2 ** (attempt - 1))
+        jitter = random.uniform(0.1, 0.6)
+        sleep_for = retry_after_seconds or (exponential_backoff + jitter)
+
+        print(
+            f"{request_label}: Pixabay rate limit reached (429). "
+            f"Waiting {sleep_for:.1f}s before retry {attempt}/{MAX_RETRIES}."
+        )
+        debug_log(debug, f"{request_label}: rate limit headers {dict(response.headers)}")
+
+        if attempt >= MAX_RETRIES:
+            return response
+
+        time.sleep(sleep_for)
+
+    raise RuntimeError("Unreachable retry loop state")
+
+
 def fetch_hits(api_key: str, query: str, options: Dict[str, str], debug: bool) -> List[Dict[str, Any]]:
     params = {"key": api_key, "q": query, **options}
     debug_log(debug, f"Calling Pixabay API with params: {json.dumps(sanitize_debug_data(params), indent=2)}")
 
-    response = requests.get(API_URL, params=params, timeout=30)
-    debug_log(debug, f"Pixabay API status code: {response.status_code}")
-
-    if response.status_code == 429:
-        retry_after = response.headers.get("Retry-After", "60")
-        print(f"Pixabay API rate limit reached. Please wait about {retry_after} seconds and try again.")
-        debug_log(debug, f"Rate limit headers: {dict(response.headers)}")
-
+    response = request_with_retry(
+        "get",
+        API_URL,
+        debug=debug,
+        request_label="Pixabay API search",
+        redact_url_in_logs=False,
+        params=params,
+        timeout=30,
+    )
     response.raise_for_status()
 
     payload = response.json()
@@ -257,7 +306,15 @@ def download_images(hits: List[Dict[str, Any]], destination: Path, debug: bool) 
             continue
 
         debug_log(debug, f"Downloading image {idx}/{len(hits)}")
-        response = requests.get(url, timeout=60, stream=True)
+        response = request_with_retry(
+            "get",
+            url,
+            debug=debug,
+            request_label=f"Image download {idx}/{len(hits)}",
+            redact_url_in_logs=True,
+            timeout=60,
+            stream=True,
+        )
         response.raise_for_status()
 
         ext = Path(url.split("?")[0]).suffix or ".jpg"
@@ -287,6 +344,7 @@ def download_images(hits: List[Dict[str, Any]], destination: Path, debug: bool) 
         }
         details.append(record)
         print(f"Downloaded {idx}/{len(hits)}: {filename.name}")
+        time.sleep(DOWNLOAD_COOLDOWN_SECONDS + random.uniform(0.05, 0.25))
 
     return details
 
