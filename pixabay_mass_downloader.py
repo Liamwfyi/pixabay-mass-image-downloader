@@ -57,6 +57,35 @@ VALID_COLORS = (
 )
 
 
+def prompt_debug_mode() -> bool:
+    while True:
+        raw = input("Enable debug mode? [y/N]: ").strip().lower()
+        if raw in ("", "n", "no"):
+            return False
+        if raw in ("y", "yes"):
+            return True
+        print("Please enter y or n.")
+
+
+def debug_log(enabled: bool, message: str) -> None:
+    if enabled:
+        print(f"[DEBUG] {message}")
+
+
+def sanitize_debug_data(value: Any) -> Any:
+    if isinstance(value, dict):
+        sanitized: Dict[str, Any] = {}
+        for key, item in value.items():
+            if "url" in key.lower():
+                sanitized[key] = "<redacted>"
+            else:
+                sanitized[key] = sanitize_debug_data(item)
+        return sanitized
+    if isinstance(value, list):
+        return [sanitize_debug_data(item) for item in value]
+    return value
+
+
 def prompt_parent_directory() -> Path:
     default_dir = Path.home() / "Desktop"
     raw = input(f"Save location (press Enter for {default_dir}): ").strip()
@@ -116,6 +145,21 @@ def prompt_choice(prompt_text: str, valid: tuple[str, ...], default: str) -> str
         print(f"Please choose one of: {', '.join(valid)}")
 
 
+def prompt_non_negative_int(prompt_text: str, default: int) -> int:
+    while True:
+        raw = input(f"{prompt_text} (default: {default}): ").strip()
+        if not raw:
+            return default
+        try:
+            value = int(raw)
+        except ValueError:
+            print("Please enter a whole number.")
+            continue
+        if value >= 0:
+            return value
+        print("Please enter a value greater than or equal to 0.")
+
+
 def prompt_positive_int(prompt_text: str, default: int) -> int:
     while True:
         raw = input(f"{prompt_text} (default: {default}): ").strip()
@@ -157,8 +201,8 @@ def prompt_advanced_options(requested_count: int) -> Dict[str, str]:
 
     category = prompt_optional_choice("Category", VALID_CATEGORIES)
     color = prompt_optional_choice("Color filter", VALID_COLORS)
-    min_width = prompt_positive_int("Minimum width in px", 0)
-    min_height = prompt_positive_int("Minimum height in px", 0)
+    min_width = prompt_non_negative_int("Minimum width in px", 0)
+    min_height = prompt_non_negative_int("Minimum height in px", 0)
     image_ids = input("Specific image IDs (comma-separated, optional): ").strip()
 
     if category:
@@ -177,26 +221,42 @@ def prompt_advanced_options(requested_count: int) -> Dict[str, str]:
     return options
 
 
-def fetch_hits(api_key: str, query: str, options: Dict[str, str]) -> List[Dict[str, Any]]:
+def fetch_hits(api_key: str, query: str, options: Dict[str, str], debug: bool) -> List[Dict[str, Any]]:
     params = {"key": api_key, "q": query, **options}
+    debug_log(debug, f"Calling Pixabay API with params: {json.dumps(sanitize_debug_data(params), indent=2)}")
+
     response = requests.get(API_URL, params=params, timeout=30)
+    debug_log(debug, f"Pixabay API status code: {response.status_code}")
+
+    if response.status_code == 429:
+        retry_after = response.headers.get("Retry-After", "60")
+        print(f"Pixabay API rate limit reached. Please wait about {retry_after} seconds and try again.")
+        debug_log(debug, f"Rate limit headers: {dict(response.headers)}")
+
     response.raise_for_status()
 
     payload = response.json()
+    sanitized_payload = sanitize_debug_data(payload)
+    debug_log(debug, f"Pixabay API response body (sanitized): {json.dumps(sanitized_payload, indent=2)}")
+
     hits = payload.get("hits", [])
     if not isinstance(hits, list):
         return []
-    return [hit for hit in hits if isinstance(hit, dict)]
+    filtered_hits = [hit for hit in hits if isinstance(hit, dict)]
+    debug_log(debug, f"Valid hit count: {len(filtered_hits)}")
+    return filtered_hits
 
 
-def download_images(hits: List[Dict[str, Any]], destination: Path) -> List[Dict[str, Any]]:
+def download_images(hits: List[Dict[str, Any]], destination: Path, debug: bool) -> List[Dict[str, Any]]:
     details: List[Dict[str, Any]] = []
 
     for idx, hit in enumerate(hits, start=1):
         url = hit.get("largeImageURL") or hit.get("webformatURL")
         if not isinstance(url, str) or not url:
+            debug_log(debug, f"Skipping hit {idx}: no usable image URL.")
             continue
 
+        debug_log(debug, f"Downloading image {idx}/{len(hits)}")
         response = requests.get(url, timeout=60, stream=True)
         response.raise_for_status()
 
@@ -231,9 +291,10 @@ def download_images(hits: List[Dict[str, Any]], destination: Path) -> List[Dict[
     return details
 
 
-def save_details_files(details: List[Dict[str, Any]], destination: Path) -> None:
+def save_details_files(details: List[Dict[str, Any]], destination: Path, debug: bool) -> None:
     json_path = destination / "image_details.json"
     json_path.write_text(json.dumps(details, indent=2), encoding="utf-8")
+    debug_log(debug, f"Wrote metadata JSON: {json_path}")
 
     rows = []
     for item in details:
@@ -287,10 +348,12 @@ def save_details_files(details: List[Dict[str, Any]], destination: Path) -> None
 """
     html_path = destination / "image_details.html"
     html_path.write_text(html_content, encoding="utf-8")
+    debug_log(debug, f"Wrote metadata HTML: {html_path}")
 
 
 def main() -> None:
     print("Pixabay Mass Downloader")
+    debug = prompt_debug_mode()
     parent_dir = prompt_parent_directory()
     folder_name = prompt_folder_name()
     query = prompt_search_query()
@@ -300,11 +363,12 @@ def main() -> None:
 
     target_dir = parent_dir / folder_name
     target_dir.mkdir(parents=True, exist_ok=True)
+    debug_log(debug, f"Output directory: {target_dir}")
 
     print("\nSearching Pixabay via API...")
 
     try:
-        hits = fetch_hits(api_key, query, options)
+        hits = fetch_hits(api_key, query, options, debug)
     except requests.HTTPError as exc:
         print(f"Pixabay API request failed: {exc}")
         print("Verify your API key and filters, then try again.")
@@ -317,8 +381,8 @@ def main() -> None:
     if len(hits) < requested_count:
         print(f"Only found {len(hits)} images. Downloading available images.")
 
-    details = download_images(hits, target_dir)
-    save_details_files(details, target_dir)
+    details = download_images(hits, target_dir, debug)
+    save_details_files(details, target_dir, debug)
     print(f"Done! Saved {len(details)} images to: {target_dir}")
     print(f"Saved details pages: {target_dir / 'image_details.html'} and {target_dir / 'image_details.json'}")
 
