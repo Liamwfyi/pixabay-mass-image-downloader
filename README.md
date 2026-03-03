@@ -87,9 +87,3 @@ Available filter options:
 5. Save metadata output files:
    - `image_details.json`
    - `image_details.html`
-
-## Version history
-
-```bash
-git log --oneline
-```
