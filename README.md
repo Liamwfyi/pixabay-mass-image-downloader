@@ -65,6 +65,10 @@ Available filter options:
 - `per_page` (auto-set from image count)
 - `id`
 
+## Debug mode and error codes
+
+See [DEBUG_AND_ERRORS.md](DEBUG_AND_ERRORS.md) for a full explanation of how debug mode works and what every error code means.
+
 ## Troubleshooting
 
 - **`externally-managed-environment` during pip install**
