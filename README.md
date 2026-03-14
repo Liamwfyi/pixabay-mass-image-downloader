@@ -67,7 +67,7 @@ Available filter options:
 
 ## Debug mode and error codes
 
-See [DEBUG_AND_ERRORS.md](DEBUG_AND_ERRORS.md) for a full explanation of how debug mode works and what every error code means.
+See [DEBUG_AND_ERRORS.md](DEBUG_AND_ERRORS.md) for a full explanation of how debug mode works and what each and every error code means.
 
 ## Troubleshooting
 
