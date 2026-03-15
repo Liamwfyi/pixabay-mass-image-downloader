@@ -117,11 +117,11 @@ Completed with <n> skipped images due to repeated HTTP errors.
 
 ---
 
-#### `Download error: <details>` *(GUI only)*
+#### `"Download error"` dialog *(GUI only)*
 
 **When:** An unexpected exception occurs inside the download worker thread.  
 **Cause:** Any error not covered by the specific handlers above (e.g. a filesystem permission error, a network connectivity problem).  
-**Fix:** Read the message shown in the error dialogue for specific details.
+**Fix:** Read the error dialog titled **“Download error”** for the full message. The detailed error text is shown in the dialog body and is also logged in the status list as `Error: <details>`.
 
 ---
 
