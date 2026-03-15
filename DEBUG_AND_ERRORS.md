@@ -57,18 +57,20 @@ Any dictionary key containing `"url"` (case-insensitive) in the sanitised API re
 | **200** | OK | Continues normally. |
 | **400** | Bad Request | Raises an HTTP error. Check that all filter values are valid for the Pixabay API. |
 | **403** | Forbidden | Raises an HTTP error. Your API key may be missing, invalid, or revoked. |
-| **429** | Too Many Requests (rate limited) | Automatically retries up to **5 times** using exponential back-off with jitter. If a `Retry-After` header is present its value is used as the wait time instead. If all retries are exhausted the last response is returned and the request fails. |
+| **429** | Too Many Requests (rate limited) | Automatically retries up to **5 times** using exponential back-off with jitter. If a numeric `Retry-After` header (in seconds) is present, its value (clamped to a minimum of **1.0 s**) is used as the wait time instead; non-numeric values are ignored and exponential back-off is used. If all retries are exhausted the last response is returned and the request fails. |
 | **Other 4xx / 5xx** | Other HTTP error | The response is returned and `.raise_for_status()` turns it into an `HTTPError`. |
 
 #### Retry timing for `429`
 
-| Attempt | Approximate wait (no `Retry-After` header) |
+| Attempt | Approximate wait (no usable numeric `Retry-After` header) |
 |---|---|
 | 1 | ~1.6 – 2.1 s |
 | 2 | ~3.1 – 3.6 s |
 | 3 | ~6.1 – 6.6 s |
 | 4 | ~12.1 – 12.6 s |
 | 5 | (last attempt, request returned immediately) |
+
+If the server sends a `Retry-After` header that can be parsed as a number of seconds, that value (with a minimum of **1.0 s**) overrides the approximate back-off waits shown above. If the header is missing or cannot be parsed as a numeric value (for example, an HTTP-date), the exponential back-off timings in this table are used instead.
 
 ### Application errors
 
