@@ -65,9 +65,9 @@ Any dictionary key containing `"url"` (case-insensitive) in the sanitised API re
 | Attempt | Approximate wait (no `Retry-After` header) |
 |---|---|
 | 1 | ~1.6 – 2.1 s |
-| 2 | ~3.6 – 4.1 s |
-| 3 | ~7.6 – 8.1 s |
-| 4 | ~15.6 – 16.1 s |
+| 2 | ~3.1 – 3.6 s |
+| 3 | ~6.1 – 6.6 s |
+| 4 | ~12.1 – 12.6 s |
 | 5 | (last attempt, request returned immediately) |
 
 ### Application errors
