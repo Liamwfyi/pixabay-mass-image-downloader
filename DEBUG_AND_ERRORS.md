@@ -42,7 +42,7 @@ Check the **Debug mode** checkbox before clicking **Start**.
 
 ### URL redaction
 
-Image download URLs are automatically replaced with `<redacted>` in debug output to avoid logging potentially sensitive direct-download links. The Pixabay API search URL is shown in full because it only contains your query parameters (your API key is included in those parameters, so treat debug output as sensitive).
+Image download URLs are automatically replaced with `<redacted>` in debug output to avoid logging potentially sensitive direct-download links. For Pixabay search requests, the base URL (`https://pixabay.com/api/`) is logged as shown in the table above, and the request parameters (including your API key) are logged separately in a params debug line. Because the API key appears in that params debug output, you should treat all debug logs as sensitive.
 
 Any dictionary key containing `"url"` (case-insensitive) in the sanitised API response body is also replaced with `<redacted>`.
 
